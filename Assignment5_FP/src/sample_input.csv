@@ -1,0 +1,6 @@
+Name,Age,GPA,Hours,HasCriminalRecord
+Alice,20,3.0,110,false
+Bob,17,3.5,10,false
+Charlie,21,4.0,0,false
+Diana,22,-1.0,15,false
+Eve,21,3.2,50,true
