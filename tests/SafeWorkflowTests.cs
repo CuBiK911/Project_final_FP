@@ -135,6 +135,19 @@ namespace ApplicationScoring.Tests
             Assert.IsType<Invalid>(above);
         }
 
-       
+        [Fact] 
+        public void StatePreservation_FailedTransitionLeavesOriginalUnchanged()
+        {
+            var validApp = new ValidatedApplication("Alice", 20, 3.0m, 110);
+            WorkflowState original = new Pending(validApp);
+
+            var rejected = ConfirmationWorkflow.Reject(original, "Test rejection");
+            Assert.IsType<Rejected>(rejected);
+
+            
+            Assert.IsType<Pending>(original);
+            var pending = (Pending)original;
+            Assert.Equal("Alice", pending.Applicant.Name);
+        }
     }
 }
