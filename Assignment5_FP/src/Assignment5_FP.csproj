@@ -10,7 +10,13 @@
   <ItemGroup>
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
       <_Parameter1>Pipeline.Tests</_Parameter1>
-    </AssemblyAttribute>
+    </AssemblyAttribute> 
+  <None Update="native_scoring.dll" Condition="Exists('native_scoring.dll')">
+    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+  </None>
+  <None Update="libnative_scoring.so" Condition="Exists('libnative_scoring.so')">
+    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+  </None>
   </ItemGroup>
 
 </Project>

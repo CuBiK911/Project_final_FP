@@ -49,7 +49,6 @@ namespace ApplicationScoring
                         validApps.Add(v.Value);
                         break;
                     case Invalid inv:
-                        Console.WriteLine($"Rejected: {string.Join(", ", inv.Reasons)}");
                         break;
                     default:
                         throw new InvalidOperationException($"Unexpected validation outcome: {outcome.GetType().Name}");
