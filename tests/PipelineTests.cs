@@ -2,11 +2,16 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Xunit;
-
+using System.Globalization;
 namespace ApplicationScoring.Tests
 {
     public class PipelineTests
     {
+        static PipelineTests()
+    {
+        CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
+        CultureInfo.CurrentUICulture = CultureInfo.InvariantCulture;
+    }
         private readonly IReadOnlyList<RawApplication> _normalDataset = new List<RawApplication>
         {
             new("Alice", "20", "3.0", "110", "false"), 

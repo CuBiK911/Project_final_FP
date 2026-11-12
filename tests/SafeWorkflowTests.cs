@@ -2,11 +2,16 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Xunit;
-
+using System.Globalization;
 namespace ApplicationScoring.Tests
 {
     public class SafeWorkflowTests
     {
+        static SafeWorkflowTests()
+    {
+        CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
+        CultureInfo.CurrentUICulture = CultureInfo.InvariantCulture;
+    }
         [Fact] 
         public void Factory_ValidInput_CreatesUsableValidatedValue()
         {

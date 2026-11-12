@@ -2,11 +2,16 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using Xunit;
-
+using System.Globalization;
 namespace ApplicationScoring.Tests
 {
     public class ExceptionHandlingTests
     {
+        static ExceptionHandlingTests()
+    {
+        CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
+        CultureInfo.CurrentUICulture = CultureInfo.InvariantCulture;
+    }
         private readonly IReadOnlyList<ValidatedApplication> _apps = new List<ValidatedApplication>
         {
             new ValidatedApplication("Alice", 20, 3.0m, 110),
@@ -101,7 +106,7 @@ namespace ApplicationScoring.Tests
         [Fact] 
         public void MissingFile_ReturnsFileNotFound()
         {
-            var result = FileBoundary.LoadApplications("non_existent_file.csv");
+            var result = FileBoundary.LoadApplications("100%please_non_existent_file_xyz123.csv");
             Assert.IsType<Failure<IReadOnlyList<RawApplication>, DomainError>>(result);
             var error = ((Failure<IReadOnlyList<RawApplication>, DomainError>)result).Error;
             Assert.Equal(ApplicationError.FileNotFound, error.Code);
