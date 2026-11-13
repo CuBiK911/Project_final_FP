@@ -240,7 +240,7 @@ In `Program.cs`, it is partially applied to create two distinct, configured func
 **Run:** `cd Assignment5_FP\src`
 -        `dotnet run`
 **Test:** `dotnet test`
-# Git Link: https://github.com/CuBiK911/Project_final_FP.git  : Branch Main  : "" commit identifier
+# Git Link: https://github.com/CuBiK911/Project_final_FP.git  : Branch Main  : "4f23d4cd7454248ee0a1f8c3b9ff5df08fd22973" commit identifier
 # Final
 ## Run from the project root
 
