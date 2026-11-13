@@ -1,117 +1,91 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using Xunit;
 
-namespace ApplicationScoring.Tests
+namespace ApplicationScoring.Tests;
+
+public class ExtensionMethodsTests
 {
-    public class Assignment8Tests
+    private readonly ValidatedApplication[] _applicants =
+    [
+        TestApplications.Valid("Charlie", "19", "3.5", "110"),
+        TestApplications.Valid("Alice", "20", "3.5", "110"),
+        TestApplications.Valid("Bob", "22", "3.8", "40")
+    ];
+
+    [Fact]
+    public void CalculateAverageGpa_AggregatesAndSupportsEmptyInput()
     {
-        private readonly IReadOnlyList<ValidatedApplication> _apps = new List<ValidatedApplication>
-        {
-            new ValidatedApplication("Alice", 20, 3.5m, 110),
-            new ValidatedApplication("Bob", 22, 3.8m, 40),
-            new ValidatedApplication("Charlie", 19, 3.5m, 110) 
-        }.AsReadOnly();
-
-        [Fact] 
-        public void Extensions_CalculateAverageGpa_ReturnsCorrectValue()
-        {
-            double avg = _apps.CalculateAverageGpa();
-            Assert.Equal(3.6, Math.Round(avg, 1));
-        }
-
-        [Fact] 
-        public void Reports_HighAchievers_UsesDeterministicThenBy()
-        {
-            var scored = _apps.ScoreAll(a => a.Gpa * 100).ToList();
-            var report = ReportGenerator.GenerateHighAchieversReport(scored);
-            
-          
-            int aliceIndex = report.IndexOf("Alice");
-            int charlieIndex = report.IndexOf("Charlie");
-            Assert.True(aliceIndex < charlieIndex, "Alice should appear before Charlie due to ThenBy(Name)");
-        }
-
-        [Fact] 
-        public void ConfiguredFunctions_PartialApplication_ProducesDifferentResults()
-        {
-            var scorer = ScoringFactory.CreateScorer();
-            var policyA = scorer(10m)(1m);
-            var policyB = scorer(1m)(10m);
-
-            var app = new ValidatedApplication("Test", 20, 5.0m, 5);
-            
-            
-            var app2 = new ValidatedApplication("Test2", 20, 2.0m, 10);
-            
-            Assert.Equal(30m, policyA(app2)); 
-            Assert.Equal(102m, policyB(app2)); 
-        }
-
-       [Fact] 
-public void DeferredExecution_DoesNotProcessBeforeEnumeration()
-{
-    DataLoader.ResetCounter();
-
-    
-    string tempFile = Path.GetTempFileName();
-    File.WriteAllText(tempFile, "Name,Age,GPA,Hours,HasCriminalRecord\nAlice,20,3.0,10,false\nBob,21,3.5,20,false");
-
-    try
-    {
-        
-        var enumerable = DataLoader.LoadAndStreamRawApplications(tempFile);
-
-       
-        Assert.Equal(0, DataLoader.TransformationCount); 
-
-        
-        var list = enumerable.ToList();
-
-       
-        Assert.True(DataLoader.TransformationCount > 0); 
+        Assert.Equal(3.6, Math.Round(_applicants.CalculateAverageGpa(), 1));
+        Assert.Equal(0, Array.Empty<ValidatedApplication>().CalculateAverageGpa());
     }
-    finally
+
+    [Fact]
+    public void HighAchievers_OrdersScoreTiesByName()
     {
-       
-        if (File.Exists(tempFile)) File.Delete(tempFile);
+        var scored = _applicants.ScoreAll(app => app.Gpa * 100);
+        var report = ReportGenerator.HighAchievers(scored);
+
+        Assert.Equal(new[] { "Bob", "Alice", "Charlie" }, report.Select(row => row.Name));
     }
-}
 
-        [Fact] 
-        public void ResourceLifetime_FileIsDisposedAfterLoading()
+    [Fact]
+    public void PartiallyAppliedWeights_ProduceDifferentResults()
+    {
+        var scorer = ScoringFactory.CreateScorer();
+        var applicant = TestApplications.Valid("Test", "20", "2.0", "10");
+        Assert.Equal(30m, scorer(10m)(1m)(applicant));
+        Assert.Equal(102m, scorer(1m)(10m)(applicant));
+    }
+
+    [Fact]
+    public void DeferredScoring_ExecutesOnlyWhenEnumerated()
+    {
+        var calls = 0;
+        var deferred = _applicants.ScoreAll(app =>
         {
-            string tempFile = Path.GetTempFileName();
-            File.WriteAllText(tempFile, "Header\nA,20,3.0,10,false");
+            calls++;
+            return ScoringPolicies.AcademicPolicy(app);
+        });
 
-            var enumerable = DataLoader.LoadAndStreamRawApplications(tempFile);
-            var list = enumerable.ToList(); 
+        Assert.Equal(0, calls);
+        var snapshot = deferred.ToArray();
+        Assert.Equal(_applicants.Length, calls);
+        Assert.Equal(810m, snapshot[0].Score);
+        Assert.Equal(3, snapshot.Length);
+        Assert.Equal(_applicants.Length, calls);
+    }
 
-            
-            Exception ex = Record.Exception(() => File.Delete(tempFile));
-            Assert.Null(ex); 
-        }
-
-        [Fact] 
-        public void NativeIntegration_ValidInput_ReturnsExpectedMultiplier()
+    [Fact]
+    public void Loading_ReleasesFileBeforeReturningSnapshot()
+    {
+        var path = Path.GetTempFileName();
+        try
         {
-            
-            var result = NativeScoringAdapter.GetExperienceMultiplier(110);
-            
-            Assert.IsType<Success<int, DomainError>>(result);
-            Assert.Equal(3, ((Success<int, DomainError>)result).Value);
+            File.WriteAllText(path, "Name,Age,GPA,Hours,HasCriminalRecord\nA,20,3.0,10,false");
+            var result = FileBoundary.LoadApplications(path);
+            File.Delete(path);
+            var loaded = Assert.IsType<Success<IReadOnlyList<RawApplication>, DomainError>>(result);
+            Assert.Equal("A", Assert.Single(loaded.Value).Name);
         }
-
-        [Fact] 
-        public void NativeIntegration_InvalidInput_ReturnsFailureWithoutCallingNative()
+        finally
         {
-            var result = NativeScoringAdapter.GetExperienceMultiplier(-5);
-            
-            Assert.IsType<Failure<int, DomainError>>(result);
-            var error = ((Failure<int, DomainError>)result).Error;
-            Assert.Equal(ApplicationError.InvalidGpa, error.Code);
+            File.Delete(path);
         }
+    }
+
+    [Fact]
+    public void NativeIntegration_ValidInput_ReturnsExpectedMultiplier()
+    {
+        if (!OperatingSystem.IsWindows() || !File.Exists(Path.Combine(AppContext.BaseDirectory, "native_scoring.dll")))
+            return;
+
+        var result = NativeScoringAdapter.GetExperienceMultiplier(110);
+        Assert.Equal(3, Assert.IsType<Success<int, DomainError>>(result).Value);
+    }
+
+    [Fact]
+    public void NativeIntegration_InvalidInput_ReturnsFailureWithoutCallingNative()
+    {
+        var result = NativeScoringAdapter.GetExperienceMultiplier(-5);
+        Assert.Equal(ApplicationError.InvalidGpa, Assert.IsType<Failure<int, DomainError>>(result).Error.Code);
     }
 }

@@ -2,16 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Xunit;
-using System.Globalization;
 namespace ApplicationScoring.Tests
 {
     public class SafeWorkflowTests
     {
-        static SafeWorkflowTests()
-    {
-        CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
-        CultureInfo.CurrentUICulture = CultureInfo.InvariantCulture;
-    }
         [Fact] 
         public void Factory_ValidInput_CreatesUsableValidatedValue()
         {
@@ -103,7 +97,7 @@ namespace ApplicationScoring.Tests
         [Fact]
         public void RepeatedOperation_FollowsDocumentedSafeRule()
         {
-            var validApp = new ValidatedApplication("Alice", 20, 3.0m, 110);
+            var validApp = TestApplications.Valid("Alice", "20", "3.0", "110");
             WorkflowState state = new Pending(validApp);
 
            
@@ -143,7 +137,7 @@ namespace ApplicationScoring.Tests
         [Fact] 
         public void StatePreservation_FailedTransitionLeavesOriginalUnchanged()
         {
-            var validApp = new ValidatedApplication("Alice", 20, 3.0m, 110);
+            var validApp = TestApplications.Valid("Alice", "20", "3.0", "110");
             WorkflowState original = new Pending(validApp);
 
             var rejected = ConfirmationWorkflow.Reject(original, "Test rejection");

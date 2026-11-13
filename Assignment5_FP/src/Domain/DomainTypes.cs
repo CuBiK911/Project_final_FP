@@ -45,7 +45,10 @@ namespace ApplicationScoring
         MissingApplicant,
         StateTransitionNotAllowed,
         FileNotFound,
-        MalformedFile
+        MalformedFile,
+        FileReadFailed,
+        FileWriteFailed,
+        UnknownPolicy
     }
 
     public record DomainError(ApplicationError Code, string Message);

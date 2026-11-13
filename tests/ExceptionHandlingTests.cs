@@ -2,20 +2,14 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using Xunit;
-using System.Globalization;
 namespace ApplicationScoring.Tests
 {
     public class ExceptionHandlingTests
     {
-        static ExceptionHandlingTests()
-    {
-        CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
-        CultureInfo.CurrentUICulture = CultureInfo.InvariantCulture;
-    }
         private readonly IReadOnlyList<ValidatedApplication> _apps = new List<ValidatedApplication>
         {
-            new ValidatedApplication("Alice", 20, 3.0m, 110),
-            new ValidatedApplication("Bob", 22, 1.5m, 50)
+            TestApplications.Valid("Alice", "20", "3.0", "110"),
+            TestApplications.Valid("Bob", "22", "1.5", "50")
         }.AsReadOnly();
 
         [Fact] 

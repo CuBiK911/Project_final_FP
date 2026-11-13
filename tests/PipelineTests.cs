@@ -1,113 +1,105 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using Xunit;
-using System.Globalization;
-namespace ApplicationScoring.Tests
+
+namespace ApplicationScoring.Tests;
+
+public class PipelineTests
 {
-    public class PipelineTests
-    {
-        static PipelineTests()
-    {
-        CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
-        CultureInfo.CurrentUICulture = CultureInfo.InvariantCulture;
-    }
-        private readonly IReadOnlyList<RawApplication> _normalDataset = new List<RawApplication>
-        {
-            new("Alice", "20", "3.0", "110", "false"), 
-            new("Charlie", "21", "4.0", "0", "false")  
-        }.AsReadOnly();
-        
-        
+    private static RawApplication[] Sample() =>
+    [
+        new("Alice", "20", "3.0", "110", "false"),
+        new("Bob", "17", "3.5", "10", "false"),
+        new("Charlie", "21", "4.0", "0", "false"),
+        new("Diana", "22", "-1.0", "15", "false"),
+        new("Eve", "21", "3.2", "50", "true")
+    ];
+
     [Fact]
-       public void Factory_ValidInput_CreatesUsableValidatedValue()
-{
-    
-    var outcome = ApplicationFactory.Create("Alice", "20", "3.0", "110", "false");
+    public void AcademicWorkflow_RanksEligibleRowsAndExplainsRejections()
+    {
+        var report = Workflow.RunDetailed(Sample(), ScoringPolicies.AcademicPolicy);
 
-    Assert.IsType<Valid>(outcome);
-    var valid = (Valid)outcome;
-    Assert.Equal("Alice", valid.Value.Name);
-    Assert.Equal(20, valid.Value.Age);
-    Assert.Equal(3.0m, valid.Value.Gpa);
-    Assert.Equal(110, valid.Value.Hours);
-}
-        [Fact] 
-        public void NormalWorkflow_ProducesDocumentedResult()
+        Assert.Collection(report.Ranking.RankedApplicants,
+            first => Assert.Equal(("Charlie", 800m), (first.Applicant.Name, first.Score)),
+            second => Assert.Equal(("Alice", 710m), (second.Applicant.Name, second.Score)));
+        Assert.Equal(new[] { "Bob", "Diana", "Eve" }, report.Rejections.Select(item => item.Name));
+        Assert.Equal(new[] { 2, 4, 5 }, report.Rejections.Select(item => item.RecordNumber));
+        Assert.Equal("Charlie", Assert.Single(report.HighAchievers).Name);
+        Assert.Equal(new AgeGroupRow("21-25", 1, 4), report.AgeGroups[0]);
+    }
+
+    [Fact]
+    public void HolisticWorkflow_ChangesTheRankingUsingTheSameRows()
+    {
+        var report = Workflow.RunDetailed(Sample(), ScoringPolicies.HolisticPolicy);
+
+        Assert.Collection(report.Ranking.RankedApplicants,
+            first => Assert.Equal(("Alice", 850m), (first.Applicant.Name, first.Score)),
+            second => Assert.Equal(("Charlie", 400m), (second.Applicant.Name, second.Score)));
+        Assert.Equal(3, report.Rejections.Count);
+    }
+
+    [Fact]
+    public void EmptyDataset_ProducesEmptyReportWithoutScoring()
+    {
+        var report = Workflow.RunDetailed([], _ => throw new InvalidOperationException("Unexpected scoring"));
+
+        Assert.Empty(report.Ranking.RankedApplicants);
+        Assert.Empty(report.Rejections);
+        Assert.Empty(report.AgeGroups);
+        Assert.Empty(report.HighAchievers);
+        Assert.Equal("No eligible candidates.", report.Ranking.Summary);
+    }
+
+    [Fact]
+    public void InvalidRows_SkipScoringAndLeaveCallerOwnedRowsUntouched()
+    {
+        var rows = Sample().ToList();
+        var original = rows.ToArray();
+        var scored = new List<string>();
+        var report = Workflow.RunDetailed(rows, applicant =>
         {
-            var report = Workflow.Run(_normalDataset, ScoringPolicies.AcademicPolicy);
-            Assert.Equal(2, report.RankedApplicants.Count);
-           
-            Assert.Equal("Charlie", report.RankedApplicants[0].Applicant.Name);
-            Assert.Equal(800m, report.RankedApplicants[0].Score);
-        }
+            scored.Add(applicant.Name);
+            return 0m;
+        });
 
-        [Fact] 
-        public void EmptyDataset_ProducesEmptyResultWithoutCrashing()
-        {
-            var emptyDataset = new List<RawApplication>().AsReadOnly();
-            var report = Workflow.Run(emptyDataset, ScoringPolicies.AcademicPolicy);
-            Assert.Empty(report.RankedApplicants);
-            Assert.Equal("No eligible candidates.", report.Summary);
-        }
+        Assert.Equal(original, rows);
+        Assert.Equal(new[] { "Alice", "Charlie" }, scored);
+        rows.Clear();
+        Assert.Equal(2, report.Ranking.RankedApplicants.Count);
+        Assert.Equal(3, report.Rejections.Count);
+    }
 
-        [Fact] 
-        public void BoundaryValue_FollowsInclusionRule()
-        {
-            
-            var boundaryDataset = new List<RawApplication> { new("BoundaryUser", "18", "2.5", "10", "false") }.AsReadOnly();
-            var report = Workflow.Run(boundaryDataset, ScoringPolicies.AcademicPolicy);
-            Assert.Single(report.RankedApplicants);
-        }
+    [Fact]
+    public void Factory_AcceptsInclusiveBoundariesAndTrimsName()
+    {
+        var lower = TestApplications.Valid("  Alex  ", "18", "0", "0");
+        var upper = TestApplications.Valid("Alex", "25", "4.0", "0");
 
-        [Fact] 
-        public void InvalidAndMissingInput_AreRejected()
-        {
-            var invalidDataset = new List<RawApplication>
-            {
-                new(null, "20", "3.0", "10", "false"),          
-                new("Bob", "seventeen", "3.0", "10", "false"),  
-                new("Diana", "20", "5.0", "10", "false"),       
-                new("Eve", "20", "3.0", "10", "maybe")          
-            }.AsReadOnly();
+        Assert.Equal(("Alex", 18, 0m, 0), (lower.Name, lower.Age, lower.Gpa, lower.Hours));
+        Assert.Equal(("Alex", 25, 4m, 0), (upper.Name, upper.Age, upper.Gpa, upper.Hours));
+    }
 
-            var (valid, errors) = ApplicationParser.ParseAndValidate(invalidDataset);
-            
-            Assert.Empty(valid);
-            Assert.Equal(4, errors.Count);
-        }
+    [Theory]
+    [InlineData(null, "20", "3.0", "10", "false", "Name")]
+    [InlineData("A", "twenty", "3.0", "10", "false", "Age")]
+    [InlineData("A", "20", "3,5", "10", "false", "GPA")]
+    [InlineData("A", "20", "4.1", "10", "false", "GPA")]
+    [InlineData("A", "20", "3.0", "-1", "false", "Hours")]
+    [InlineData("A", "20", "3.0", "10", "maybe", "Criminal record flag")]
+    public void Factory_RejectsInvalidFields(string? name, string age, string gpa, string hours, string flag, string field)
+    {
+        var result = Assert.IsType<Invalid>(ApplicationFactory.Create(name, age, gpa, hours, flag));
+        Assert.StartsWith(field, Assert.Single(result.Reasons));
+    }
 
-        [Fact]
-        public void TwoPolicies_ProduceDifferentResults()
-        {
-            var academicReport = Workflow.Run(_normalDataset, ScoringPolicies.AcademicPolicy);
-            var holisticReport = Workflow.Run(_normalDataset, ScoringPolicies.HolisticPolicy);
+    [Fact]
+    public void Ranking_TiesUseOrdinalApplicantName()
+    {
+        RawApplication[] rows = [new("Zoe", "20", "3.5", "0", "false"), new("Ana", "21", "3.5", "0", "false")];
+        var report = Workflow.RunDetailed(rows, ScoringPolicies.AcademicPolicy);
 
-            
-            Assert.Equal("Charlie", academicReport.RankedApplicants[0].Applicant.Name);
-            
-            
-            Assert.Equal("Alice", holisticReport.RankedApplicants[0].Applicant.Name);
-        }
-
-        [Fact] 
-        public void PurityAndStages_CallerOwnedInputRemainsUnchanged()
-        {
-            var inputList = new List<ValidatedApplication> { new("TestUser", 20, 3.5m, 20) };
-            IReadOnlyList<ValidatedApplication> callerOwned = inputList.AsReadOnly();
-            
-            var originalCount = callerOwned.Count;
-            var originalFirst = callerOwned[0];
-
-            var filtered = PipelineStages.FilterEligible(callerOwned);
-            var scored = PipelineStages.ComputeScores(filtered, ScoringPolicies.AcademicPolicy);
-
-          
-            Assert.Equal(originalCount, callerOwned.Count);
-            Assert.Same(originalFirst, callerOwned[0]);
-            
-           
-            Assert.NotSame(callerOwned, filtered);
-        }
+        Assert.Equal(new[] { "Ana", "Zoe" }, report.Ranking.RankedApplicants.Select(item => item.Applicant.Name));
+        Assert.Equal(new[] { "Ana", "Zoe" }, report.HighAchievers.Select(item => item.Name));
+        Assert.Equal(new[] { "18-20", "21-25" }, report.AgeGroups.Select(item => item.Group));
     }
 }
